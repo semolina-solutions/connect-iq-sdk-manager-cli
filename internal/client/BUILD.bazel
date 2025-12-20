@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "client",
+    srcs = [
+        "agreement.go",
+        "devices.go",
+        "error.go",
+        "fonts.go",
+        "logging.go",
+        "login.go",
+        "sdks.go",
+        "util.go",
+    ],
+    importpath = "github.com/lindell/connect-iq-sdk-manager-cli/internal/client",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/connectiq",
+        "//internal/datetime",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_puerkitobio_goquery//:goquery",
+        "@com_github_sirupsen_logrus//:logrus",
+    ],
+)

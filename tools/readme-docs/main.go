@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"text/template"
@@ -17,7 +18,6 @@ import (
 )
 
 const templatePath = "./docs/README.template.md"
-const resultingPath = "./README.md"
 
 // These commands should not show up in the readme docs
 var bannedCommands = []string{"version"}
@@ -38,6 +38,11 @@ type command struct {
 
 func main() {
 	data := templateData{}
+
+	resultingPath := "README.md"
+	if wd := os.Getenv("BUILD_WORKING_DIRECTORY"); wd != "" {
+		resultingPath = filepath.Join(wd, "README.md")
+	}
 
 	// Main usage
 	data.MainUsage = strings.TrimSpace(cmd.RootCmd().UsageString())
@@ -68,6 +73,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	absPath, err := filepath.Abs(resultingPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Generating README at: %s\n", absPath)
 
 	err = os.WriteFile(resultingPath, tmplBuf.Bytes(), 0600)
 	if err != nil {

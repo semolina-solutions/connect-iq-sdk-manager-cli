@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "storage",
+    srcs = ["storage.go"],
+    importpath = "github.com/lindell/connect-iq-sdk-manager-cli/internal/storage",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/connectiq",
+        "@com_github_pkg_errors//:errors",
+    ],
+)

@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "readme-docs_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/lindell/connect-iq-sdk-manager-cli/tools/readme-docs",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//cmd",
+        "@com_github_spf13_cobra//:cobra",
+        "@com_github_spf13_pflag//:pflag",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_binary(
+    name = "readme-docs",
+    data = ["//:docs/README.template.md"],
+    embed = [":readme-docs_lib"],
+    visibility = ["//visibility:public"],
+)

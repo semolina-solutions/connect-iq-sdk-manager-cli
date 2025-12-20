@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "manager",
+    srcs = [
+        "argeement-accept.go",
+        "argeement-view.go",
+        "device-download.go",
+        "device-list.go",
+        "devices.go",
+        "fonts.go",
+        "login.go",
+        "manager.go",
+        "sdk.go",
+        "sdk-current-path.go",
+        "sdk-download.go",
+        "sdk-list.go",
+        "sdk-set.go",
+        "table.go",
+        "util.go",
+    ],
+    importpath = "github.com/lindell/connect-iq-sdk-manager-cli/internal/manager",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/client",
+        "//internal/connectiq",
+        "//internal/datetime",
+        "//internal/oauth",
+        "//internal/storage",
+        "@com_github_deckarep_golang_set_v2//:golang-set",
+        "@com_github_masterminds_semver_v3//:semver",
+        "@com_github_olekukonko_tablewriter//:tablewriter",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_sirupsen_logrus//:logrus",
+    ],
+)

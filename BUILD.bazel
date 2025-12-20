@@ -1,0 +1,21 @@
+load("@gazelle//:def.bzl", "gazelle")
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+# gazelle:prefix github.com/lindell/connect-iq-sdk-manager-cli
+gazelle(name = "gazelle")
+
+exports_files(["docs/README.template.md"])
+
+go_library(
+    name = "connect-iq-sdk-manager_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/lindell/connect-iq-sdk-manager-cli",
+    visibility = ["//visibility:private"],
+    deps = ["//cmd"],
+)
+
+go_binary(
+    name = "connect-iq-sdk-manager",
+    embed = [":connect-iq-sdk-manager_lib"],
+    visibility = ["//visibility:public"],
+)

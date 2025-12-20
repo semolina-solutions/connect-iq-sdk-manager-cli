@@ -29,3 +29,7 @@ config.yml
 # Editor specific files
 .vscode/
 .idea/
+
+# Bazel
+.bazelrc
+bazel-*
