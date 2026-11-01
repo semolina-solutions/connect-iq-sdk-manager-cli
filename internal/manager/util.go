@@ -2,6 +2,7 @@ package manager
 
 import (
 	"archive/zip"
+	"context"
 	"crypto/md5" //nolint:gosec
 	"fmt"
 	"io"
@@ -9,10 +10,59 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+const downloadConcurrency = 10
+
+func runConcurrent[T any](ctx context.Context, items []T, fn func(context.Context, T) error) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	ch := make(chan T, len(items))
+	for _, item := range items {
+		ch <- item
+	}
+	close(ch)
+
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		firstErr error
+	)
+
+	workers := min(downloadConcurrency, len(items))
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range ch {
+				if ctx.Err() != nil {
+					return
+				}
+				if err := fn(ctx, item); err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+						cancel()
+					}
+					mu.Unlock()
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	return firstErr
+}
 
 func unzip(source, destination string) error {
 	archive, err := zip.OpenReader(source)
@@ -21,48 +71,48 @@ func unzip(source, destination string) error {
 	}
 	defer archive.Close()
 	for _, file := range archive.Reader.File {
-		reader, err := file.Open()
-		if err != nil {
-			return err
-		}
-		defer reader.Close()
-
-		path := filepath.Join(destination, file.Name) // nolint: gosec
-		if strings.Contains(path, "..") {
-			continue
-		}
-
-		// Remove file if it already exists; no problem if it doesn't; other cases can error out below
-		_ = os.Remove(path)
-
-		// Create a directory, including parents
-		if file.FileInfo().IsDir() {
-			err = os.MkdirAll(path, os.ModePerm)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-
-		// Create a directory at path, including parents
-		err = os.MkdirAll(filepath.Dir(path), os.ModePerm)
-		if err != nil {
-			return err
-		}
-
-		// and create the actual file.  This ensures that the parent directories exist!
-		// An archive may have a single file with a nested path, rather than a file for each parent dir
-		writer, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
-		if err != nil {
-			return err
-		}
-		defer writer.Close()
-		_, err = io.Copy(writer, reader) //nolint:gosec
-		if err != nil {
+		if err := unzipFile(file, destination); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func unzipFile(file *zip.File, destination string) error {
+	reader, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	path := filepath.Join(destination, file.Name) // nolint: gosec
+	if strings.Contains(path, "..") {
+		return nil
+	}
+
+	// Remove file if it already exists; no problem if it doesn't; other cases can error out below
+	_ = os.Remove(path)
+
+	// Create a directory, including parents
+	if file.FileInfo().IsDir() {
+		return os.MkdirAll(path, os.ModePerm)
+	}
+
+	// Create a directory at path, including parents
+	if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
+		return err
+	}
+
+	// and create the actual file. This ensures that the parent directories exist!
+	// An archive may have a single file with a nested path, rather than a file for each parent dir
+	writer, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+
+	_, err = io.Copy(writer, reader) //nolint:gosec
+	return err
 }
 
 func fetchAndExtract(r io.Reader, destination string, filename string) (md5sum string, err error) {

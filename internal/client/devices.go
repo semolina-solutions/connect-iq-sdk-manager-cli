@@ -33,7 +33,7 @@ var devicesURL = "https://api.gcs.garmin.com/ciq-product-onboarding/devices?sdkM
 var deviceDownloadURL = "https://api.gcs.garmin.com/ciq-product-onboarding/devices/%s/ciqInfo" // %s is partNumber
 
 func GetDeviceInfo(ctx context.Context) ([]DeviceInfo, error) {
-	req, err := http.NewRequest(http.MethodGet, devicesURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, devicesURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func removeDuplicateDevices(devices []DeviceInfo) ([]DeviceInfo, error) {
 }
 
 func DownloadDevice(ctx context.Context, device DeviceInfo) (io.ReadCloser, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf(deviceDownloadURL, url.PathEscape(device.PartNumber)), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf(deviceDownloadURL, url.PathEscape(device.PartNumber)), nil)
 	if err != nil {
 		return nil, err
 	}

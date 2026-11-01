@@ -14,16 +14,30 @@ type loggingRoundTripper struct {
 	Next http.RoundTripper
 }
 
+var defaultTransport = func() http.RoundTripper {
+	if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		cloned := t.Clone()
+		cloned.MaxIdleConns = 100
+		cloned.MaxIdleConnsPerHost = 16
+		return cloned
+	}
+	return http.DefaultTransport
+}()
+
 // RoundTrip logs a request-response
 func (l loggingRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	req, _ := httputil.DumpRequestOut(r, true)
-
 	var roundTripper http.RoundTripper
 	if l.Next != nil {
 		roundTripper = l.Next
 	} else {
-		roundTripper = http.DefaultTransport
+		roundTripper = defaultTransport
 	}
+
+	if !log.IsLevelEnabled(log.TraceLevel) {
+		return roundTripper.RoundTrip(r)
+	}
+
+	req, _ := httputil.DumpRequestOut(r, true)
 
 	start := time.Now()
 	resp, err := roundTripper.RoundTrip(r)

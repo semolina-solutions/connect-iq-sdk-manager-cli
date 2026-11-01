@@ -26,26 +26,30 @@ func (m *Manager) downloadFonts(ctx context.Context, deviceInfos []client.Device
 		return errors.WithMessage(err, "could not find which fonts are already installed")
 	}
 
+	var fontsToDownload []string
 	for _, fontFilename := range fontFilenames {
-		log := log.WithField("font", fontFilename)
+		logger := log.WithField("font", fontFilename)
 
 		if existingFonts.Contains(fontFilename) {
-			log.Info("Font is already installed")
+			logger.Info("Font is already installed")
 			continue
 		} else if strings.Contains(fontFilename, " ") {
 			// This seems to be the same behavior as the GUI since these file are never downloaded
-			log.Info("Font is contains spaces and can't be downloaded")
+			logger.Info("Font is contains spaces and can't be downloaded")
 			continue
 		}
+		fontsToDownload = append(fontsToDownload, fontFilename)
+	}
 
-		if err := m.fetchFont(ctx, log, fontFilename); isNotFound(err) {
-			log.Error(errors.WithMessage(err, "font did not exist to download"))
+	return runConcurrent(ctx, fontsToDownload, func(ctx context.Context, fontFilename string) error {
+		logger := log.WithField("font", fontFilename)
+		if err := m.fetchFont(ctx, logger, fontFilename); isNotFound(err) {
+			logger.Error(errors.WithMessage(err, "font did not exist to download"))
 		} else if err != nil {
 			return errors.WithMessagef(err, "unable to download font: %q", fontFilename)
 		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (m *Manager) fetchFont(ctx context.Context, log log.FieldLogger, font string) error {

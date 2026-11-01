@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 
 	"github.com/lindell/connect-iq-sdk-manager-cli/internal/client"
 	"github.com/lindell/connect-iq-sdk-manager-cli/internal/connectiq"
@@ -29,11 +30,34 @@ func (m *Manager) Download(ctx context.Context, config DownloadConfig) error {
 
 	log.Infof("Downloading %d devices", len(deviceInfos))
 
-	for _, device := range deviceInfos {
-		log := log.WithField("device", device.Name)
-		if err := m.fetchDevice(ctx, log, device); err != nil {
+	var (
+		mu           sync.Mutex
+		hashEntities []connectiq.ConfigEntity
+	)
+
+	err = runConcurrent(ctx, deviceInfos, func(ctx context.Context, device client.DeviceInfo) error {
+		logger := log.WithField("device", device.Name)
+		hash, err := m.fetchDevice(ctx, logger, device)
+		if err != nil {
 			return err
 		}
+		if hash != "" {
+			mu.Lock()
+			hashEntities = append(hashEntities, connectiq.ConfigEntity{
+				Key:   fmt.Sprintf("%s-hash", device.Name),
+				Value: hash,
+			})
+			mu.Unlock()
+		}
+		return nil
+	})
+	if len(hashEntities) > 0 {
+		if storeErr := connectiq.StoreConfigKeyVals(hashEntities...); storeErr != nil {
+			log.Errorf("Could not store device hashes: %s", storeErr)
+		}
+	}
+	if err != nil {
+		return err
 	}
 
 	if config.IncludeFonts {
@@ -45,24 +69,20 @@ func (m *Manager) Download(ctx context.Context, config DownloadConfig) error {
 	return nil
 }
 
-func (m *Manager) fetchDevice(ctx context.Context, log log.FieldLogger, device client.DeviceInfo) error {
+func (m *Manager) fetchDevice(ctx context.Context, log log.FieldLogger, device client.DeviceInfo) (string, error) {
 	deviceDir := path.Join(connectiq.DevicesPath, device.Name)
 
 	if _, err := os.Stat(deviceDir); !os.IsNotExist(err) {
 		log.Info("Device folder already exist")
-		return nil
+		return "", nil
 	}
 
 	log.Info("Downloading device zip")
 	r, err := client.DownloadDevice(ctx, device)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer r.Close()
 
-	hash, err := fetchAndExtract(r, deviceDir, "device.zip")
-	if err := connectiq.StoreConfigKeyVal(fmt.Sprintf("%s-hash", device.Name), hash); err != nil {
-		log.Errorf("Could not store hash: %s", err)
-	}
-	return err
+	return fetchAndExtract(r, deviceDir, "device.zip")
 }
